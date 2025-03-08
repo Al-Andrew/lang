@@ -177,7 +177,6 @@ fn fixup_jumps(self: *Self, instructions: []lang.Instruction) !void {
         if (jump_target == null) {
             return error.LabelNotFound;
         }
-        std.debug.print("Fixing up jump label: {s} -> {d} for {d}\n", .{jump_target_label, jump_target.?, jump_instruction_offset});
         instructions[jump_instruction_offset].op2 = @intCast(jump_target.?);
     }
 }
@@ -216,6 +215,21 @@ pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruc
                 try self.expect_char(',');
                 const src = try self.lex_reg();
                 const instr = lang.Instruction.movrr(dst, src);
+                try instructions.append(instr);
+            },
+            lang.Instruction.Type.pushi => {
+                const imm = try self.lex_imm();
+                const instr = lang.Instruction.pushi(imm);
+                try instructions.append(instr);
+            },
+            lang.Instruction.Type.pushr => {
+                const reg = try self.lex_reg();
+                const instr = lang.Instruction.pushr(reg);
+                try instructions.append(instr);
+            },
+            lang.Instruction.Type.popr => {
+                const reg = try self.lex_reg();
+                const instr = lang.Instruction.popr(reg);
                 try instructions.append(instr);
             },
             lang.Instruction.Type.addrrr => {
@@ -271,10 +285,10 @@ pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruc
 test "movri" {
     const text = "movri r0, 123";
     const instructions = try assemble_text(std.heap.page_allocator, text);
-    try std.testing.expect(instructions.len == 1);
-    try std.testing.expect(instructions[0].opcode == lang.Instruction.Type.movri);
-    try std.testing.expect(instructions[0].op1 == 0);
-    try std.testing.expect(instructions[0].op2 == 123);
+    try std.testing.expectEqual(1, instructions.len);
+    try std.testing.expectEqual(lang.Instruction.Type.movri, instructions[0].opcode);
+    try std.testing.expectEqual(0, instructions[0].op1);
+    try std.testing.expectEqual(123, instructions[0].op2);
 }
 
 test "simple fib" {
@@ -294,8 +308,30 @@ test "simple fib" {
     \\
     ;
     const program = try assemble_text(std.heap.page_allocator, text);
-    var vm = lang.VM.init();
+    var vm = try lang.VM.init(std.heap.page_allocator);
+    defer vm.deinit();
+
     try vm.run_program(program);
 
-    try std.testing.expect(vm.registers[0] == 55);
+    try std.testing.expectEqual(55, vm.registers[0]);
+}
+
+test "push/pop" {
+    const text = 
+    \\pushi 1234567
+    \\movri r0, 31
+    \\pushr r0
+    \\popr r0
+    \\dbgprintr r0
+    \\popr r1
+    \\dbgprintr r1
+    \\
+    ;
+    const program = try assemble_text(std.heap.page_allocator, text);
+    var vm = try lang.VM.init(std.heap.page_allocator);
+    defer vm.deinit();
+
+    try vm.run_program(program);
+    try std.testing.expectEqual(31, vm.registers[0]);
+    try std.testing.expectEqual(1234567, vm.registers[1]);
 }

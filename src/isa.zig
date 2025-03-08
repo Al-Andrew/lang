@@ -10,6 +10,9 @@ pub const Instruction = struct {
     pub const Type = enum {
         movri,
         movrr,
+        pushi,
+        pushr,
+        popr,
         addrrr,
         addrri,
         cmpri,
@@ -23,6 +26,18 @@ pub const Instruction = struct {
 
     pub fn movrr(dst: u64, src: u64) Instruction {
         return Instruction{ .opcode = Type.movrr, .op1 = @intCast(dst), .op2 = @intCast(src), .op3 = 0 };
+    }
+
+    pub fn pushi(imm: i64) Instruction {
+        return Instruction{ .opcode = Type.pushi, .op1 = imm, .op2 = 0, .op3 = 0 };
+    }
+
+    pub fn pushr(reg: u64) Instruction {
+        return Instruction{ .opcode = Type.pushr, .op1 = @intCast(reg), .op2 = 0, .op3 = 0 };
+    }
+
+    pub fn popr(reg: u64) Instruction {
+        return Instruction{ .opcode = Type.popr, .op1 = @intCast(reg), .op2 = 0, .op3 = 0 };
     }
 
     pub fn addrrr(dst: u64, src1: u64, src2: u64) Instruction {
