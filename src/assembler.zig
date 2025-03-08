@@ -7,8 +7,8 @@ const Self = @This();
 text : []const u8 = undefined,
 current_idx : usize = 0,
 alloc : std.mem.Allocator = undefined,
-
-
+lable_table : std.StringHashMap(u64) = undefined,
+jump_table : std.AutoHashMap(u64, []const u8) = undefined,
 
 fn is_whitespace(c: u8) bool {
     return c == ' ' or c == '\n' or c == '\t';
@@ -48,7 +48,7 @@ fn lex_ident(self: *Self) ![]const u8 {
             return error.IdentifierStartNotFound;
         }
         // then move untill not is_ident_char or :
-        if (!is_ident_char(c) or c == ':') {
+        if (!(is_ident_char(c) or c == ':')) {
             break;
         }
         self.current_idx += 1;
@@ -140,6 +140,23 @@ test "lex_imm" {
     try std.testing.expect(imm == 123);
 }
 
+fn lex_label_or_imm(self: *Self, current_instruction_offset: u64) !i64 {
+    self.skip_whitespace();
+
+    if (self.current_idx >= self.text.len) {
+        return error.ExpectedLabelOrImmNotFound;
+    }
+
+    if(self.text[self.current_idx] == ':') {
+        self.current_idx += 1;
+        const label = try self.lex_ident();
+        try self.jump_table.put(current_instruction_offset, label);
+        return 0xdeadbeef;
+    } else {
+        return try self.lex_imm();
+    }
+}
+
 fn expect_char(self: *Self, c: u8) !void {
     self.skip_whitespace();
     if (self.current_idx >= self.text.len) {
@@ -151,21 +168,38 @@ fn expect_char(self: *Self, c: u8) !void {
     self.current_idx += 1;
 }
 
+fn fixup_jumps(self: *Self, instructions: []lang.Instruction) !void {
+    var jt = self.jump_table.iterator();
+    while (jt.next()) |jt_entry| {
+        const jump_instruction_offset = jt_entry.key_ptr.*;
+        const jump_target_label = jt_entry.value_ptr.*;
+        const jump_target = self.lable_table.get(jump_target_label);
+        if (jump_target == null) {
+            return error.LabelNotFound;
+        }
+        std.debug.print("Fixing up jump label: {s} -> {d} for {d}\n", .{jump_target_label, jump_target.?, jump_instruction_offset});
+        instructions[jump_instruction_offset].op2 = @intCast(jump_target.?);
+    }
+}
+
 pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruction {
     
     var self = Self{
         .text = text,
         .current_idx = 0,
         .alloc = alloc,
+        .lable_table = std.StringHashMap(u64).init(alloc),
+        .jump_table = std.AutoHashMap(u64, []const u8).init(alloc),
     };
 
     var instructions = std.ArrayList(lang.Instruction).init(alloc);
 
     while(self.current_idx < text.len) {
         const ident = try self.lex_ident();
-
         if (ident[ident.len - 1] == ':') {
-            return error.LabelNotImplemented;
+            const label = ident[0..ident.len - 1]; // remove :
+            try self.lable_table.put(label, instructions.items.len);
+            continue;
         }
 
         const opcode = try ident_to_opcode(ident);
@@ -214,8 +248,9 @@ pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruc
             lang.Instruction.Type.jleri => {
                 const reg = try self.lex_reg();
                 try self.expect_char(',');
-                const offset = try self.lex_imm();
-                const instr = lang.Instruction.jleri(reg, offset);
+                // NOTE: weird thing here with the label, consider making another instruction
+                const offset = try self.lex_label_or_imm(instructions.items.len);
+                const instr: lang.Instruction = lang.Instruction.jleri(reg, offset);
                 try instructions.append(instr);
             },
             lang.Instruction.Type.dbgprintr => {
@@ -227,6 +262,8 @@ pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruc
 
         self.skip_whitespace();
     }
+
+    try self.fixup_jumps(instructions.items);
 
     return instructions.items;
 }
@@ -246,13 +283,14 @@ test "simple fib" {
     \\movri r0, 0
     \\movri r1, 1
     \\movri r3, 0
+    \\loop:
     \\addrrr r2, r0, r1
     \\movrr r0, r1
     \\movrr r1, r2
     \\addrri r3, r3, 1
     \\cmpri r4, r3, 10
     \\dbgprintr r0
-    \\jleri r4, 3
+    \\jleri r4, :loop
     \\
     ;
     const program = try assemble_text(std.heap.page_allocator, text);
