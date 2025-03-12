@@ -16,11 +16,34 @@ pub fn init(alloc: std.mem.Allocator) !Self {
         .alloc = alloc,
     };
     @memset(&vm.registers, 0);
+    vm.registers[31] = @bitCast(@intFromPtr(vm.stack.ptr));
     return vm;
 }
 
 pub fn deinit(self: *Self) void {
     self.alloc.free(self.stack);
+}
+
+fn store_i64(ptr: [*]u8, value: i64) void {
+    ptr[0] = @intCast(value & 0xFF);
+    ptr[1] = @intCast((value >> 8)  & 0xFF);
+    ptr[2] = @intCast((value >> 16) & 0xFF);
+    ptr[3] = @intCast((value >> 24) & 0xFF);
+    ptr[4] = @intCast((value >> 32) & 0xFF);
+    ptr[5] = @intCast((value >> 40) & 0xFF);
+    ptr[6] = @intCast((value >> 48) & 0xFF);
+    ptr[7] = @intCast((value >> 56) & 0xFF);
+}
+
+fn read_i64(ptr: [*]u8) i64 {
+    return @as(i64, ptr[0])
+        | (@as(i64, ptr[1]) << 8)
+        | (@as(i64, ptr[2]) << 16)
+        | (@as(i64, ptr[3]) << 24)
+        | (@as(i64, ptr[4]) << 32)
+        | (@as(i64, ptr[5]) << 40)
+        | (@as(i64, ptr[6]) << 48)
+        | (@as(i64, ptr[7]) << 56);
 }
 
 pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
@@ -36,42 +59,27 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
                 self.registers[@intCast(instr.op1)] = self.registers[@intCast(instr.op2)];
             },
             lang.Instruction.Type.pushi => {
-                const addr = self.registers[31];
-                self.stack[@intCast(addr)] = @intCast(instr.op1 & 0xFF);
-                self.stack[@intCast(addr + 1)] = @intCast((instr.op1 >> 8)  & 0xFF);
-                self.stack[@intCast(addr + 2)] = @intCast((instr.op1 >> 16) & 0xFF);
-                self.stack[@intCast(addr + 3)] = @intCast((instr.op1 >> 24) & 0xFF);
-                self.stack[@intCast(addr + 4)] = @intCast((instr.op1 >> 32) & 0xFF);
-                self.stack[@intCast(addr + 5)] = @intCast((instr.op1 >> 40) & 0xFF);
-                self.stack[@intCast(addr + 6)] = @intCast((instr.op1 >> 48) & 0xFF);
-                self.stack[@intCast(addr + 7)] = @intCast((instr.op1 >> 56) & 0xFF);
+                const off: usize = @bitCast(self.registers[31]);
+                const addr: [*]u8 = @ptrFromInt(off);
+
+                store_i64(addr, instr.op1);
 
                 self.registers[31] += 8;
             },
             lang.Instruction.Type.pushr => {
-                const addr = self.registers[31];
-                self.stack[@intCast(addr)] = @intCast(self.registers[@intCast(instr.op1)] & 0xFF);
-                self.stack[@intCast(addr + 1)] = @intCast((self.registers[@intCast(instr.op1)] >> 8) & 0xFF);
-                self.stack[@intCast(addr + 2)] = @intCast((self.registers[@intCast(instr.op1)] >> 16) & 0xFF);
-                self.stack[@intCast(addr + 3)] = @intCast((self.registers[@intCast(instr.op1)] >> 24) & 0xFF);
-                self.stack[@intCast(addr + 4)] = @intCast((self.registers[@intCast(instr.op1)] >> 32) & 0xFF);
-                self.stack[@intCast(addr + 5)] = @intCast((self.registers[@intCast(instr.op1)] >> 40) & 0xFF);
-                self.stack[@intCast(addr + 6)] = @intCast((self.registers[@intCast(instr.op1)] >> 48) & 0xFF);
-                self.stack[@intCast(addr + 7)] = @intCast((self.registers[@intCast(instr.op1)] >> 56) & 0xFF);
+                const off: usize = @bitCast(self.registers[31]);
+                const addr: [*]u8 = @ptrFromInt(off);
+
+                store_i64(addr, self.registers[@intCast(instr.op1)]);
 
                 self.registers[31] += 8;
             },
             lang.Instruction.Type.popr => {
                 self.registers[31] -= 8;
-                const addr = self.registers[31];
-                self.registers[@intCast(instr.op1)] = @as(i64,self.stack[@intCast(addr)])
-                    | (@as(i64, self.stack[@intCast(addr + 1)]) << 8)
-                    | (@as(i64, self.stack[@intCast(addr + 2)]) << 16)
-                    | (@as(i64, self.stack[@intCast(addr + 3)]) << 24)
-                    | (@as(i64, self.stack[@intCast(addr + 4)]) << 32)
-                    | (@as(i64, self.stack[@intCast(addr + 5)]) << 40)
-                    | (@as(i64, self.stack[@intCast(addr + 6)]) << 48)
-                    | (@as(i64, self.stack[@intCast(addr + 7)]) << 56);
+                const off: usize = @bitCast(self.registers[31]);
+                const addr: [*]u8 = @ptrFromInt(off);
+
+                self.registers[@intCast(instr.op1)] = read_i64(addr);
             },
             lang.Instruction.Type.addrrr => {
                 self.registers[@intCast(instr.op1)] = self.registers[@intCast(instr.op2)] + self.registers[@intCast(instr.op3)];
