@@ -3,9 +3,15 @@ const lang = @import("lang.zig");
 
 const Self = @This();
 
-const STACK_SIZE: usize = 1024 * 1024; // 1MB
+pub const STACK_SIZE: usize = 1024 * 1024; // 1MB
 
-registers : [32]i64 = undefined, // TODO: allog special names for important registers, 31-SP
+pub const Register = enum(usize) {
+    rIP = 29,
+    rSB = 30,
+    rSP = 31,
+};
+
+registers : [32]i64 = undefined,
 stack: []u8 = undefined,
 alloc: std.mem.Allocator = undefined,
 
@@ -47,10 +53,10 @@ fn read_i64(ptr: [*]u8) i64 {
 }
 
 pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
-    var pc: u64 = 0;
-    while (pc < program.len) {
-        const instr = program[pc];
-        pc += 1;
+    while (self.registers[@intFromEnum(Register.rIP)] < program.len) {
+        const instr = program[@intCast(self.registers[@intFromEnum(Register.rIP)])];
+        self.registers[@intFromEnum(Register.rIP)] += 1;
+
         switch (instr.opcode) {
             lang.Instruction.Type.movri => {
                 self.registers[@intCast(instr.op1)] = instr.op2;
@@ -59,7 +65,7 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
                 self.registers[@intCast(instr.op1)] = self.registers[@intCast(instr.op2)];
             },
             lang.Instruction.Type.pushi => {
-                const off: usize = @bitCast(self.registers[31]);
+                const off: usize = @bitCast(self.registers[@intFromEnum(Register.rSP)]);
                 const addr: [*]u8 = @ptrFromInt(off);
 
                 store_i64(addr, instr.op1);
@@ -67,7 +73,7 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
                 self.registers[31] += 8;
             },
             lang.Instruction.Type.pushr => {
-                const off: usize = @bitCast(self.registers[31]);
+                const off: usize = @bitCast(self.registers[@intFromEnum(Register.rSP)]);
                 const addr: [*]u8 = @ptrFromInt(off);
 
                 store_i64(addr, self.registers[@intCast(instr.op1)]);
@@ -76,7 +82,7 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
             },
             lang.Instruction.Type.popr => {
                 self.registers[31] -= 8;
-                const off: usize = @bitCast(self.registers[31]);
+                const off: usize = @bitCast(self.registers[@intFromEnum(Register.rSP)]);
                 const addr: [*]u8 = @ptrFromInt(off);
 
                 self.registers[@intCast(instr.op1)] = read_i64(addr);
@@ -92,7 +98,7 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
             },
             lang.Instruction.Type.jleri => {
                 if (self.registers[@intCast(instr.op1)] < 0) {
-                    pc = @intCast(instr.op2);
+                    self.registers[@intFromEnum(Register.rIP)] = @intCast(instr.op2);
                 }
             },
             lang.Instruction.Type.dbgprintr => {
