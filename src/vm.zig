@@ -110,6 +110,8 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
 
 
 test "simple fib" {
+    std.debug.print("\n", .{});
+
     const program = [_]lang.Instruction{
         lang.Instruction.movri(0, 0),
         lang.Instruction.movri(1, 1),
@@ -132,6 +134,8 @@ test "simple fib" {
 }
 
 test "push/pop" {
+    std.debug.print("\n", .{});
+
     const program = [_]lang.Instruction{
         lang.Instruction.pushi(1234567),
         lang.Instruction.movri(0, 31),

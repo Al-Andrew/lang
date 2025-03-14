@@ -57,9 +57,9 @@ fn lex_ident(self: *Self) ![]const u8 {
 }
 
 fn ident_to_opcode(ident: []const u8) !lang.Instruction.Type {
-    const len = @typeInfo(lang.Instruction.Type).@"Enum".fields.len;
+    const len = @typeInfo(lang.Instruction.Type).@"enum".fields.len;
     inline for(0..len) |i| {
-        const field = @typeInfo(lang.Instruction.Type).@"Enum".fields[i];
+        const field = @typeInfo(lang.Instruction.Type).@"enum".fields[i];
         if (std.mem.eql(u8, ident, field.name)) {
             return @enumFromInt(field.value);
         }
@@ -72,12 +72,35 @@ test "ident_to_opcode" {
     try std.testing.expect(opcode == lang.Instruction.Type.movri);
 }
 
+fn lex_reg_named(ident: []const u8) !u64 {
+    const len = @typeInfo(lang.VM.Register).@"enum".fields.len;
+    inline for(0..len) |i| {
+        const field = @typeInfo(lang.VM.Register).@"enum".fields[i];
+        if (std.mem.eql(u8, ident, field.name)) {
+            return field.value;
+        }
+    }
+    return error.NotNamedReg;
+}
+
 fn lex_reg(self: *Self) !u64 {
     const ident = try self.lex_ident();
+    
+    const named_reg = lex_reg_named(ident);
+    if(named_reg) |value| {
+        return value;
+    } else |err| {
+        switch (err) {
+            error.NotNamedReg => {},
+            // else => { return err; }
+        }
+    }
+    
+    var reg: u64 = 0;
+    
     if (ident.len < 2 or ident[0] != 'r') {
         return error.NotARegister;
     }
-    var reg: u64 = 0;
     for (ident[1..]) |c| {
         if (!is_digit(c)) {
             return error.RegisterNotANumber;
@@ -100,6 +123,11 @@ test "lex_reg" {
     };
     const reg = try self.lex_reg();
     try std.testing.expect(reg == 12);
+}
+
+test "lex_reg_named" {
+    const reg = try lex_reg_named("rSP");
+    try std.testing.expectEqual(@intFromEnum(lang.VM.Register.rSP), reg);
 }
 
 fn lex_imm(self: *Self) !i64 {
@@ -292,18 +320,19 @@ test "movri" {
 }
 
 test "simple fib" {
+    std.debug.print("\n", .{});
 
     const text = 
     \\movri r0, 0
     \\movri r1, 1
     \\movri r3, 0
     \\loop:
+    \\dbgprintr r0
     \\addrrr r2, r0, r1
     \\movrr r0, r1
     \\movrr r1, r2
     \\addrri r3, r3, 1
     \\cmpri r4, r3, 10
-    \\dbgprintr r0
     \\jleri r4, :loop
     \\
     ;
@@ -317,6 +346,8 @@ test "simple fib" {
 }
 
 test "push/pop" {
+    std.debug.print("\n", .{});
+
     const text = 
     \\pushi 1234567
     \\movri r0, 31
