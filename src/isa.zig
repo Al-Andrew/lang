@@ -17,6 +17,7 @@ pub const Instruction = struct {
         addrri,
         cmpri,
         jleri,
+        hlt,
         dbgprintr,
     };
 
@@ -54,6 +55,10 @@ pub const Instruction = struct {
 
     pub fn jleri(reg: u64, offset: i64) Instruction {
         return Instruction{ .opcode = Type.jleri, .op1 = @intCast(reg), .op2 = offset, .op3 = 0 };
+    }
+
+    pub fn hlt() Instruction {
+        return Instruction{ .opcode = Type.hlt, .op1 = 0, .op2 = 0, .op3 = 0 };
     }
 
     pub fn dbgprintr(reg: u64) Instruction {

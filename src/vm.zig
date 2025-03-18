@@ -101,6 +101,9 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
                     self.registers[@intFromEnum(Register.rIP)] = @intCast(instr.op2);
                 }
             },
+            lang.Instruction.Type.hlt => {
+                break;
+            },
             lang.Instruction.Type.dbgprintr => {
                 std.debug.print("Register {d}: {d}\n", .{instr.op1, self.registers[@intCast(instr.op1)]});
             },
@@ -152,3 +155,20 @@ test "push/pop" {
     try std.testing.expectEqual(31, vm.registers[0]);
     try std.testing.expectEqual(1234567, vm.registers[1]);
 }
+
+test "hlt" {
+    var program = [_]lang.Instruction{
+        lang.Instruction.movri(0, 123),
+        lang.Instruction.hlt(),
+        lang.Instruction.movri(1, 123),
+    };
+
+    var vm = try Self.init(std.heap.page_allocator);
+    defer vm.deinit();
+
+    try vm.run_program(&program);
+
+    try std.testing.expectEqual(123, vm.registers[0]);
+    try std.testing.expectEqual(0, vm.registers[1]);
+}
+
