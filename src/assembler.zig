@@ -3,12 +3,11 @@ const lang = @import("lang.zig");
 
 const Self = @This();
 
-
-text : []const u8 = undefined,
-current_idx : usize = 0,
-alloc : std.mem.Allocator = undefined,
-lable_table : std.StringHashMap(u64) = undefined,
-jump_table : std.AutoHashMap(u64, []const u8) = undefined,
+text: []const u8 = undefined,
+current_idx: usize = 0,
+alloc: std.mem.Allocator = undefined,
+lable_table: std.StringHashMap(u64) = undefined,
+jump_table: std.AutoHashMap(u64, []const u8) = undefined,
 
 fn is_whitespace(c: u8) bool {
     return c == ' ' or c == '\n' or c == '\t';
@@ -58,7 +57,7 @@ fn lex_ident(self: *Self) ![]const u8 {
 
 fn ident_to_opcode(ident: []const u8) !lang.Instruction.Type {
     const len = @typeInfo(lang.Instruction.Type).@"enum".fields.len;
-    inline for(0..len) |i| {
+    inline for (0..len) |i| {
         const field = @typeInfo(lang.Instruction.Type).@"enum".fields[i];
         if (std.mem.eql(u8, ident, field.name)) {
             return @enumFromInt(field.value);
@@ -74,7 +73,7 @@ test "ident_to_opcode" {
 
 fn lex_reg_named(ident: []const u8) !u64 {
     const len = @typeInfo(lang.VM.Register).@"enum".fields.len;
-    inline for(0..len) |i| {
+    inline for (0..len) |i| {
         const field = @typeInfo(lang.VM.Register).@"enum".fields[i];
         if (std.mem.eql(u8, ident, field.name)) {
             return field.value;
@@ -85,9 +84,9 @@ fn lex_reg_named(ident: []const u8) !u64 {
 
 fn lex_reg(self: *Self) !u64 {
     const ident = try self.lex_ident();
-    
+
     const named_reg = lex_reg_named(ident);
-    if(named_reg) |value| {
+    if (named_reg) |value| {
         return value;
     } else |err| {
         switch (err) {
@@ -95,9 +94,9 @@ fn lex_reg(self: *Self) !u64 {
             // else => { return err; }
         }
     }
-    
+
     var reg: u64 = 0;
-    
+
     if (ident.len < 2 or ident[0] != 'r') {
         return error.NotARegister;
     }
@@ -108,7 +107,7 @@ fn lex_reg(self: *Self) !u64 {
         reg = reg * 10 + (c - '0');
     }
 
-    if(reg > 31) {
+    if (reg > 31) {
         return error.InvalidRegisterValue;
     }
 
@@ -138,7 +137,7 @@ fn lex_imm(self: *Self) !i64 {
     while (self.current_idx < self.text.len) {
         const c = self.text[self.current_idx];
 
-        if(self.current_idx == start and (c == '-' or c == '+')) {
+        if (self.current_idx == start and (c == '-' or c == '+')) {
             self.current_idx += 1;
             continue;
         }
@@ -175,7 +174,7 @@ fn lex_label_or_imm(self: *Self, current_instruction_offset: u64) !i64 {
         return error.ExpectedLabelOrImmNotFound;
     }
 
-    if(self.text[self.current_idx] == ':') {
+    if (self.text[self.current_idx] == ':') {
         self.current_idx += 1;
         const label = try self.lex_ident();
         try self.jump_table.put(current_instruction_offset, label);
@@ -210,7 +209,6 @@ fn fixup_jumps(self: *Self, instructions: []lang.Instruction) !void {
 }
 
 pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruction {
-    
     var self = Self{
         .text = text,
         .current_idx = 0,
@@ -221,16 +219,16 @@ pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruc
 
     var instructions = std.ArrayList(lang.Instruction).init(alloc);
 
-    while(self.current_idx < text.len) {
+    while (self.current_idx < text.len) {
         const ident = try self.lex_ident();
         if (ident[ident.len - 1] == ':') {
-            const label = ident[0..ident.len - 1]; // remove :
+            const label = ident[0 .. ident.len - 1]; // remove :
             try self.lable_table.put(label, instructions.items.len);
             continue;
         }
 
         const opcode = try ident_to_opcode(ident);
-        switch(opcode) {
+        switch (opcode) {
             lang.Instruction.Type.movri => {
                 const reg = try self.lex_reg();
                 try self.expect_char(',');
@@ -300,6 +298,10 @@ pub fn assemble_text(alloc: std.mem.Allocator, text: []const u8) ![]lang.Instruc
                 const instr = lang.Instruction.dbgprintr(reg);
                 try instructions.append(instr);
             },
+            lang.Instruction.Type.hlt => {
+                const instr = lang.Instruction.hlt();
+                try instructions.append(instr);
+            },
         }
 
         self.skip_whitespace();
@@ -322,19 +324,19 @@ test "movri" {
 test "simple fib" {
     std.debug.print("\n", .{});
 
-    const text = 
-    \\movri r0, 0
-    \\movri r1, 1
-    \\movri r3, 0
-    \\loop:
-    \\dbgprintr r0
-    \\addrrr r2, r0, r1
-    \\movrr r0, r1
-    \\movrr r1, r2
-    \\addrri r3, r3, 1
-    \\cmpri r4, r3, 10
-    \\jleri r4, :loop
-    \\
+    const text =
+        \\movri r0, 0
+        \\movri r1, 1
+        \\movri r3, 0
+        \\loop:
+        \\dbgprintr r0
+        \\addrrr r2, r0, r1
+        \\movrr r0, r1
+        \\movrr r1, r2
+        \\addrri r3, r3, 1
+        \\cmpri r4, r3, 10
+        \\jleri r4, :loop
+        \\
     ;
     const program = try assemble_text(std.heap.page_allocator, text);
     var vm = try lang.VM.init(std.heap.page_allocator);
@@ -348,15 +350,15 @@ test "simple fib" {
 test "push/pop" {
     std.debug.print("\n", .{});
 
-    const text = 
-    \\pushi 1234567
-    \\movri r0, 31
-    \\pushr r0
-    \\popr r0
-    \\dbgprintr r0
-    \\popr r1
-    \\dbgprintr r1
-    \\
+    const text =
+        \\pushi 1234567
+        \\movri r0, 31
+        \\pushr r0
+        \\popr r0
+        \\dbgprintr r0
+        \\popr r1
+        \\dbgprintr r1
+        \\
     ;
     const program = try assemble_text(std.heap.page_allocator, text);
     var vm = try lang.VM.init(std.heap.page_allocator);

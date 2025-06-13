@@ -11,7 +11,7 @@ pub const Register = enum(usize) {
     rSP = 31,
 };
 
-registers : [32]i64 = undefined,
+registers: [32]i64 = undefined,
 stack: []u8 = undefined,
 alloc: std.mem.Allocator = undefined,
 
@@ -32,7 +32,7 @@ pub fn deinit(self: *Self) void {
 
 fn store_i64(ptr: [*]u8, value: i64) void {
     ptr[0] = @intCast(value & 0xFF);
-    ptr[1] = @intCast((value >> 8)  & 0xFF);
+    ptr[1] = @intCast((value >> 8) & 0xFF);
     ptr[2] = @intCast((value >> 16) & 0xFF);
     ptr[3] = @intCast((value >> 24) & 0xFF);
     ptr[4] = @intCast((value >> 32) & 0xFF);
@@ -42,14 +42,7 @@ fn store_i64(ptr: [*]u8, value: i64) void {
 }
 
 fn read_i64(ptr: [*]u8) i64 {
-    return @as(i64, ptr[0])
-        | (@as(i64, ptr[1]) << 8)
-        | (@as(i64, ptr[2]) << 16)
-        | (@as(i64, ptr[3]) << 24)
-        | (@as(i64, ptr[4]) << 32)
-        | (@as(i64, ptr[5]) << 40)
-        | (@as(i64, ptr[6]) << 48)
-        | (@as(i64, ptr[7]) << 56);
+    return @as(i64, ptr[0]) | (@as(i64, ptr[1]) << 8) | (@as(i64, ptr[2]) << 16) | (@as(i64, ptr[3]) << 24) | (@as(i64, ptr[4]) << 32) | (@as(i64, ptr[5]) << 40) | (@as(i64, ptr[6]) << 48) | (@as(i64, ptr[7]) << 56);
 }
 
 pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
@@ -105,28 +98,16 @@ pub fn run_program(self: *Self, program: []const lang.Instruction) !void {
                 break;
             },
             lang.Instruction.Type.dbgprintr => {
-                std.debug.print("Register {d}: {d}\n", .{instr.op1, self.registers[@intCast(instr.op1)]});
+                std.debug.print("Register {d}: {d}\n", .{ instr.op1, self.registers[@intCast(instr.op1)] });
             },
         }
     }
 }
 
-
 test "simple fib" {
     std.debug.print("\n", .{});
 
-    const program = [_]lang.Instruction{
-        lang.Instruction.movri(0, 0),
-        lang.Instruction.movri(1, 1),
-        lang.Instruction.movri(3, 0),
-        lang.Instruction.addrrr(2, 0, 1),
-        lang.Instruction.movrr(0, 1),
-        lang.Instruction.movrr(1, 2),
-        lang.Instruction.addrri(3, 3, 1),
-        lang.Instruction.cmpri(4, 3, 15),
-        lang.Instruction.jleri(4, 3),
-        lang.Instruction.dbgprintr(0)
-    };
+    const program = [_]lang.Instruction{ lang.Instruction.movri(0, 0), lang.Instruction.movri(1, 1), lang.Instruction.movri(3, 0), lang.Instruction.addrrr(2, 0, 1), lang.Instruction.movrr(0, 1), lang.Instruction.movrr(1, 2), lang.Instruction.addrri(3, 3, 1), lang.Instruction.cmpri(4, 3, 15), lang.Instruction.jleri(4, 3), lang.Instruction.dbgprintr(0) };
     var vm = try Self.init(std.heap.page_allocator);
     defer vm.deinit();
 
@@ -171,4 +152,3 @@ test "hlt" {
     try std.testing.expectEqual(123, vm.registers[0]);
     try std.testing.expectEqual(0, vm.registers[1]);
 }
-
